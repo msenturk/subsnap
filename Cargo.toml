@@ -1,0 +1,32 @@
+[package]
+name = "subsnap"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[dependencies]
+alass-core = "2.0.0"
+eframe = "0.33.3"
+rayon = "1.11.0"
+rustfft = "6.1"
+num-complex = "0.4"
+rfd = "0.17.2"
+subparse = "0.7"
+symphonia = { version = "0.5.5", features = ["all"] }
+webrtc-vad = "0.4.0"
+
+[build-dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "bmp"] }
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+ico = "0.3"
+
+# Optimize for size
+[profile.release]
+opt-level = "z"  # Optimize for size
+lto = true       # Enable Link Time Optimization
+codegen-units = 1 # Maximize size reduction
+panic = "abort"   # Remove panic unwinding overhead
+strip = true      # Strip symbols
+
