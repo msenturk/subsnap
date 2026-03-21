@@ -8,27 +8,19 @@ fn main() {
     let icon_rgba_path = std::path::Path::new(&manifest_dir).join("icon.rgba");
     let icon_ico_path = std::path::Path::new(&manifest_dir).join("icon.ico");
 
-    // Pre-generate raw RGBA pixels and ICO file to avoid runtime 'image' dependency
     if icon_jpg_path.exists() {
         let img = image::open(&icon_jpg_path).expect("Failed to open icon.jpg");
-        // Explicitly resize to 64x64 to minimize binary footprint
         let resized = img.resize_exact(64, 64, image::imageops::FilterType::Lanczos3);
         let rgba = resized.to_rgba8();
         
-        // Write raw pixels for main.rs (always overwrite to ensure size is correct)
         std::fs::write(&icon_rgba_path, rgba.as_raw()).expect("Failed to write icon.rgba");
 
-        // Write ICO for Windows binary resource
         let icon_image = ico::IconImage::from_rgba_data(
             64,
             64,
             rgba.into_raw(),
         );
-        let mut icon_dir = ico::IconDir::new(ico::ResourceType::Icon);
-        let entry = ico::IconImage::from_rgba_data(64, 64, icon_image.clone().into_rgba_data());
-        let _ = icon_dir; // suppressed warning
         
-        // Simplified ICO generation using ico crate
         let mut icon_dir = ico::IconDir::new(ico::ResourceType::Icon);
         icon_dir.add_entry(ico::IconDirEntry::encode(&icon_image).expect("Failed to encode icon entry"));
         
@@ -43,6 +35,7 @@ fn main() {
     }
     res.compile().unwrap();
 }
+
 
 #[cfg(not(windows))]
 fn main() {
