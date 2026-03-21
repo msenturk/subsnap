@@ -60,17 +60,15 @@ jobs:
 
       - name: Rename artifacts
         run: |
-          mv artifacts/subsnap-linux/subsnap artifacts/subsnap-linux
-          mv artifacts/subsnap-macos/subsnap artifacts/subsnap-macos
-          mv artifacts/subsnap-windows.exe/subsnap.exe artifacts/subsnap.exe
+          mkdir -p final_assets
+          mv artifacts/subsnap-linux/subsnap final_assets/subsnap-linux
+          mv artifacts/subsnap-macos/subsnap final_assets/subsnap-macos
+          mv artifacts/subsnap-windows.exe/subsnap.exe final_assets/subsnap-windows.exe
         shell: bash
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/subsnap-linux
-            artifacts/subsnap-macos
-            artifacts/subsnap.exe
+          files: final_assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
