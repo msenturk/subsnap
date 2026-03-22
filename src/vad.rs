@@ -57,7 +57,7 @@ pub fn generate_voice_map_stream(
     receiver: Receiver<Result<Vec<f32>, String>>, 
     original_rate: u32, 
     config: &crate::config::SyncConfig,
-    _progress_callback: impl FnMut(String)
+    mut progress_callback: impl FnMut(String)
 ) -> Result<(Vec<TimeSpan>, Vec<f32>), String> {
     let target_rate = 16000;
     let mut resampler = StreamedResampler::new(original_rate, target_rate);
@@ -113,8 +113,9 @@ pub fn generate_voice_map_stream(
                 
                 i16_buffer.drain(..frame_size);
                 total_frames_processed += 1;
-                if total_frames_processed % 10000 == 0 {
-                    // Muted intentionally to prevent UI flooding
+                if total_frames_processed % 2000 == 0 {
+                    let msg = format!("Running Voice Detection: {} frames processed...", total_frames_processed);
+                    progress_callback(msg);
                 }
             }
         }
