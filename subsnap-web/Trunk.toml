@@ -1,0 +1,17 @@
+[build]
+target = "index.html"
+dist = "dist"
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 8081
+open = true
+
+[clean]
+dist = "dist"
+
+# [[hooks]]
+# stage = "post_build"
+# # This is where we could package it for github pages, e.g. copying it to root or similar
+# command = "powershell"
+# command_arguments = ["-Command", "Copy-Item", "-Path", "dist/*", "-Destination", "../", "-Recurse", "-Force"]
