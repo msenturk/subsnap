@@ -10,7 +10,12 @@ pub struct SubtitleBlock {
 
 pub fn parse_srt(path: &str) -> Result<Vec<SubtitleBlock>, String> {
     let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let content = String::from_utf8_lossy(&bytes);
     
+    if content.starts_with("WEBVTT") || path.ends_with(".vtt") {
+        return parse_vtt(&content);
+    }
+
     let ext = std::path::Path::new(path).extension();
     let format = subparse::get_subtitle_format(ext, &bytes)
         .ok_or_else(|| "Unknown subtitle format".to_string())?;
@@ -29,6 +34,93 @@ pub fn parse_srt(path: &str) -> Result<Vec<SubtitleBlock>, String> {
         });
     }
     Ok(blocks)
+}
+
+fn parse_vtt(content: &str) -> Result<Vec<SubtitleBlock>, String> {
+    let mut blocks = Vec::new();
+    let mut current_start = 0;
+    let mut current_end = 0;
+    let mut current_text = Vec::new();
+    let mut in_block = false;
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.contains("-->") {
+            // Save previous block
+            if in_block {
+                blocks.push(SubtitleBlock {
+                    start_ms: current_start,
+                    end_ms: current_end,
+                    text: current_text.join("\n"),
+                });
+                current_text.clear();
+            }
+
+            let parts: Vec<&str> = line.split("-->").collect();
+            if parts.len() == 2 {
+                current_start = parse_vtt_timestamp(parts[0].trim())?;
+                current_end = parse_vtt_timestamp(parts[1].trim())?;
+                in_block = true;
+            }
+        } else if in_block {
+            if line.is_empty() {
+                blocks.push(SubtitleBlock {
+                    start_ms: current_start,
+                    end_ms: current_end,
+                    text: current_text.join("\n"),
+                });
+                current_text.clear();
+                in_block = false;
+            } else {
+                // Skip numeric IDs if they appear just before timestamps
+                if line.chars().all(|c| c.is_ascii_digit()) && current_text.is_empty() {
+                    continue;
+                }
+                current_text.push(line.to_string());
+            }
+        }
+    }
+
+    if in_block {
+        blocks.push(SubtitleBlock {
+            start_ms: current_start,
+            end_ms: current_end,
+            text: current_text.join("\n"),
+        });
+    }
+
+    Ok(blocks)
+}
+
+fn parse_vtt_timestamp(s: &str) -> Result<i64, String> {
+    // 00:00:18.416 or 00:18.416
+    let s = s.replace(',', ".");
+    let parts: Vec<&str> = s.split(':').collect();
+    
+    let (h, m, s_ms) = match parts.len() {
+        3 => (parts[0], parts[1], parts[2]),
+        2 => ("0", parts[0], parts[1]),
+        _ => return Err(format!("Invalid timestamp: {}", s)),
+    };
+
+    let h_val: i64 = h.parse().map_err(|_| "Invalid hour")?;
+    let m_val: i64 = m.parse().map_err(|_| "Invalid minute")?;
+    
+    let sec_ms_parts: Vec<&str> = s_ms.split('.').collect();
+    let (sec, ms) = match sec_ms_parts.len() {
+        2 => (sec_ms_parts[0], sec_ms_parts[1]),
+        1 => (sec_ms_parts[0], "0"),
+        _ => return Err(format!("Invalid second/ms: {}", s_ms)),
+    };
+
+    let s_val: i64 = sec.parse().map_err(|_| "Invalid second")?;
+    let mut ms_val: i64 = ms.parse().map_err(|_| "Invalid ms")?;
+    
+    // Handle cases like .4 or .41 (padding to 3 digits)
+    if ms.len() == 1 { ms_val *= 100; }
+    else if ms.len() == 2 { ms_val *= 10; }
+
+    Ok(h_val * 3600000 + m_val * 60000 + s_val * 1000 + ms_val)
 }
 
 pub fn write_srt(path: &str, blocks: &[SubtitleBlock]) -> Result<(), String> {

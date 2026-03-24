@@ -1,11 +1,13 @@
 use crate::{audio, srt, vad};
 use alass_core::{align, standard_scoring, NoProgressHandler, TimeSpan, TimePoint};
 
+use std::sync::Arc;
+
 pub fn run_sync(
     ref_path: &str,
     tgt_path: &str,
     out_path: &str,
-    mut progress_callback: impl FnMut(String),
+    progress_callback: Arc<dyn Fn(String) + Send + Sync + 'static>,
 ) -> Result<(), String> {
     let config = crate::config::SyncConfig::default();
     progress_callback(format!("Starting sync..."));
@@ -15,10 +17,11 @@ pub fn run_sync(
     
     let (ref_timespans, ref_energy) = if is_media {
         progress_callback(format!("Streaming audio from {}...", ref_path));
-        let streamed = audio::stream_audio(ref_path.to_string()).map_err(|e| format!("Audio streaming failed: {}", e))?;
+        let streamed = audio::stream_audio(ref_path.to_string(), progress_callback.clone()).map_err(|e| format!("Audio streaming failed: {}", e))?;
 
         progress_callback("Running Streamed Voice Activity Detection...".to_string());
-        vad::generate_voice_map_stream(streamed.receiver, streamed.sample_rate, &config, |msg| progress_callback(msg))
+        let pc_clone = progress_callback.clone();
+        vad::generate_voice_map_stream(streamed.receiver, streamed.sample_rate, &config, move |msg| (pc_clone)(msg))
             .map_err(|e| format!("VAD failed: {}", e))?
     } else {
         progress_callback(format!("Parsing reference SRT: {}", ref_path));
@@ -37,12 +40,13 @@ pub fn run_sync(
     let duration_ms = ref_timespans.last().map(|ts| ts.end.as_i64()).unwrap_or(0);
     
     // Phase 11: FFsubsync-Style Global Correlation
+    let pc_clone = progress_callback.clone();
     let correlation_offset = crate::correlation::find_best_global_offset(
         &ref_timespans,
         &ref_energy,
         &tgt_blocks_orig,
         config.global_search_window_ms, 
-        &mut progress_callback
+        &mut move |msg| (pc_clone)(msg)
     );
 
     progress_callback("Running Global Linear Regression Pre-pass...".to_string());

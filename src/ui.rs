@@ -49,13 +49,22 @@ impl eframe::App for AutoSubSyncApp {
                     }
                 } else {
                     let lmsg = msg.to_lowercase();
-                    if lmsg.contains("streaming audio") { self.progress = 0.05; }
-                    else if lmsg.contains("voice activity detection") { self.progress = 0.15; }
-                    else if lmsg.contains("parsing target") { self.progress = 0.35; }
-                    else if lmsg.contains("correlation") || lmsg.contains("fft") { self.progress = 0.45; }
-                    else if lmsg.contains("regression") { self.progress = 0.75; }
-                    else if lmsg.contains("aligning") || lmsg.contains("deltas") { self.progress = 0.90; }
-                    else { if self.progress < 0.9 { self.progress += 0.02; } }
+                    if lmsg.contains("downloading ffmpeg") {
+                        self.progress = 0.0 + (5.0 / 100.0); // 5% for download
+                        if let Some(last) = self.logs.last_mut() {
+                            if last.to_lowercase().contains("downloading ffmpeg") {
+                                *last = msg; // Replace last progress line
+                                continue;
+                            }
+                        }
+                    }
+                    else if lmsg.contains("streaming audio") { self.progress = 0.10; }
+                    else if lmsg.contains("voice activity detection") { self.progress = 0.20; }
+                    else if lmsg.contains("parsing target") { self.progress = 0.40; }
+                    else if lmsg.contains("correlation") || lmsg.contains("fft") { self.progress = 0.50; }
+                    else if lmsg.contains("regression") { self.progress = 0.80; }
+                    else if lmsg.contains("aligning") || lmsg.contains("deltas") { self.progress = 0.95; }
+                    else { if self.progress < 0.95 { self.progress += 0.001; } }
                     self.logs.push(msg);
                 }
             }
@@ -174,20 +183,21 @@ impl eframe::App for AutoSubSyncApp {
                             thread::spawn(move || {
                                 let tx_inner = tx.clone();
                                 let tx_cb = tx.clone();
-                                let ctx_inner = ctx_clone.clone();
                                 let ctx_cb = ctx_clone.clone();
 
-                                let result = crate::sync::run_sync(&ref_path, &tgt_path, &out_path, move |msg| {
+                                let progress_cb = std::sync::Arc::new(move |msg: String| {
                                     let _ = tx_cb.send(msg);
                                     ctx_cb.request_repaint();
                                 });
+
+                                let result = crate::sync::run_sync(&ref_path, &tgt_path, &out_path, progress_cb);
 
                                 if let Err(e) = result {
                                     let _ = tx_inner.send(format!("###SYNC_ERROR###{}", e));
                                 } else {
                                     let _ = tx_inner.send("###SYNC_COMPLETE###".to_string());
                                 }
-                                ctx_inner.request_repaint();
+                                ctx_clone.request_repaint();
                             });
                         }
                     }
